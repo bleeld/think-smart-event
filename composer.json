@@ -5,6 +5,7 @@
     "keywords": ["thinkphp", "event", "subscriber"],
     "homepage": "https://github.com/yourname/think-smart-event",
     "license": "MIT",
+    "version": "1.0.0",
     "require": {
         "php": ">=8.0",
         "topthink/framework": "^8.0"
