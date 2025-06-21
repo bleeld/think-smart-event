@@ -3,7 +3,7 @@
     "description": "ThinkPHP 智能事件订阅系统扩展包",
     "type": "library",
     "keywords": ["thinkphp", "event", "subscriber"],
-    "homepage": "https://github.com/yourname/think-smart-event",
+    "homepage": "https://github.com/bleeld/think-smart-event",
     "license": "MIT",
     "version": "1.0.0",
     "require": {
@@ -15,7 +15,7 @@
     },
     "autoload": {
         "psr-4": {
-            "think\\": "src/"
+            "bleeld\\Event\\": "src/"
         },
         "files": [
             "src/helpers.php"
@@ -23,25 +23,25 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "think\\Tests\\": "tests/"
-        }
-    },
-    "extra": {
-        "think": {
-            "services": [
-                "bleeld\\SmartEvent\\EventService"
-            ]
+            "bleeld\\Event\\Tests\\": "tests/"
         }
     },
     "scripts": {
         "post-install-cmd": [
-            "@copy-config"
+            "php think smart_event:config"
         ],
         "post-update-cmd": [
-            "@copy-config"
-        ],
-        "copy-config": [
-            "if [ ! -f './config/smart_event.php' ]; then cp './vendor/bleeld/think-smart-event/src/config/smart_event.php' './config/smart_event.php'; fi"
+            "php think smart_event:config"
         ]
+    },
+    "extra": {
+        "think": {
+            "config":{
+                "smart_event": "src/config/smart_event.php"
+            },
+            "services": [
+                "bleeld\\Event\\EventService"
+            ]
+        }
     }
 }

@@ -6,9 +6,9 @@ if (!function_exists('smart_event')) {
         if (is_array($category)) {
             // 兼容旧版单参数调用方式
             $data = $category;
-            return \think\SmartEvent\facade\SmartEvent::trigger($data);
+            return \bleeld\Event\facade\SmartEvent::trigger($data);
         }
         
-        return \think\SmartEvent\facade\SmartEvent::trigger($category, $data);
+        return \bleeld\Event\facade\SmartEvent::trigger($category, $data);
     }
 }

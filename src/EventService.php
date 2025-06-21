@@ -1,89 +1,101 @@
 <?php
 // src/EventService.php
-namespace think\SmartEvent;
+namespace bleeld\Event;
 
 use think\facade\Config;
 use think\facade\Request;
+use think\Service;
 use ReflectionClass;
 
-class EventService
+class EventService extends Service
 {
-    protected static $mappings = [];
+    protected static $mappings = []; // 缓存: [category][action] => methodName
+    protected static $validSubscribers = []; // 缓存有效订阅者
 
-    // 统一触发方法 - 支持可选类别名参数
     public static function trigger($category = null, $data = [])
     {
-        if (is_array($category)) {
-            // 兼容旧版单参数调用方式
+        $request = Request::instance();
+        $action = strtolower($request->action());
+        $categories = [];
+        $isSingleParam = false;
+
+        // 参数处理逻辑优化：支持任意数据类型
+        if (func_num_args() === 1) {
+            // 单参数模式：任意类型都视为数据，遍历所有订阅者
             $data = $category;
-            $request = Request::instance();
-            $controller = strtolower($request->controller());
-            $action = strtolower($request->action());
-            
-            // 移除 'Controller' 后缀
-            $controller = str_replace('controller', '', $controller);
-            $category = $controller;
+            $categories = array_keys(self::getSubscribers());
+            $isSingleParam = true;
+        } elseif ($category === null && func_num_args() === 0) {
+            // 无参数模式：空数据遍历所有订阅者
+            $categories = array_keys(self::getSubscribers());
+        } else {
+            // 双参数模式：指定类别和数据
+            $categories = [$category];
         }
-        
+
         $subscribers = self::getSubscribers();
         $mappings = self::getMappings();
-        
-        if (isset($mappings[$category][$action]) && isset($subscribers[$category])) {
-            $subscriberClass = $subscribers[$category];
-            $methodName = 'on' . ucfirst($action);
-            
-            if (class_exists($subscriberClass)) {
-                $subscriber = new $subscriberClass();
-                
-                if (method_exists($subscriber, $methodName)) {
-                    $subscriber->$methodName($data);
+
+        foreach ($categories as $currentCategory) {
+            if (isset($mappings[$currentCategory][$action])) {
+                $methodName = $mappings[$currentCategory][$action];
+                $subscriberClass = $subscribers[$currentCategory];
+
+                // 获取方法参数信息，支持任意类型参数传递
+                $reflection = new \ReflectionMethod($subscriberClass, $methodName);
+                $params = $reflection->getParameters();
+                $callParams = [];
+
+                // 根据方法参数数量决定如何传递数据
+                if (count($params) > 0) {
+                    // 支持单参数方法（如onUserDelete($user_id)）
+                    $callParams[] = $data;
                 }
+
+                (new $subscriberClass())->$methodName(...$callParams);
             }
         }
     }
 
-    // 获取自动生成的事件映射
     protected static function getMappings()
     {
         if (empty(self::$mappings)) {
             $subscribers = self::getSubscribers();
-            
+            $mappings = [];
+
             foreach ($subscribers as $category => $subscriberClass) {
-                if (class_exists($subscriberClass)) {
-                    $reflection = new ReflectionClass($subscriberClass);
-                    $methods = $reflection->getMethods();
-                    
-                    $mappings[$category] = [];
-                    
-                    foreach ($methods as $method) {
-                        $methodName = $method->getName();
-                        
-                        if (strpos($methodName, 'on') === 0 && $methodName !== '__construct') {
-                            $action = strtolower(substr($methodName, 2));
-                            $mappings[$category][$action] = $action;
-                        }
+                $reflection = new ReflectionClass($subscriberClass);
+                $methods = $reflection->getMethods();
+
+                foreach ($methods as $method) {
+                    $methodName = $method->getName();
+                    // 仅处理事件方法（以on开头且非构造函数）
+                    if (strpos($methodName, 'on') === 0 && $methodName !== '__construct') {
+                        $action = strtolower(substr($methodName, 2));
+                        $mappings[$category][$action] = $methodName; // 存储完整方法名
                     }
                 }
             }
-            
             self::$mappings = $mappings;
         }
-        
         return self::$mappings;
     }
 
-    // 获取订阅者配置 - 兼容两种格式
     protected static function getSubscribers()
     {
-        $config = Config::get('event', []);
-        
-        // 兼容两种配置格式
-        if (isset($config['subscribers'])) {
-            // 格式1: ['subscribers' => ['user' => User::class, ...]]
-            return $config['subscribers'];
-        } else {
-            // 格式2: ['user' => User::class, ...]
-            return $config;
+        if (empty(self::$validSubscribers)) {
+            $config = Config::get('smart_event', []);
+            $rawSubscribers = isset($config['subscribers']) ? $config['subscribers'] : $config;
+            $validSubscribers = [];
+
+            // 预过滤无效订阅者（仅保留存在的类）
+            foreach ($rawSubscribers as $category => $class) {
+                if (class_exists($class)) {
+                    $validSubscribers[$category] = $class;
+                }
+            }
+            self::$validSubscribers = $validSubscribers;
         }
+        return self::$validSubscribers;
     }
 }
